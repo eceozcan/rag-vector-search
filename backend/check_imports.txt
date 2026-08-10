@@ -1,0 +1,2 @@
+﻿C:\Users\ece\Desktop\playable-rag-vector-search\backend\.venv\Lib\site-packages\flask\__init__.py
+sbert ok
