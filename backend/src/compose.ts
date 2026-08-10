@@ -3,7 +3,7 @@ import { SearchResult } from './search';
 export function composeGroundedAnswer(query: string, results: SearchResult[]) {
   if (!results || results.length === 0) {
     return {
-      answer: `Üzgünüm, elimizde bu konuda bilgi bulunmamaktadır.`,
+      answer: `Sorry, the corpus does not contain information on that topic.`,
       citations: [],
     };
   }
@@ -13,7 +13,7 @@ export function composeGroundedAnswer(query: string, results: SearchResult[]) {
   const citations = results.map((r) => ({ id: r.chunk.id, documentId: r.chunk.documentId, score: r.score }));
   const body = topTexts.join('\n\n');
 
-  const answer = `Aşağıda ilgili pasajlar ve kaynakları bulunmaktadır:\n\n${body}\n\nKaynaklar:\n${citations
+  const answer = `The following passages and sources were used to answer your question:\n\n${body}\n\nSources:\n${citations
     .map((c) => `- chunk ${c.id} (document ${c.documentId}) score=${c.score.toFixed(3)}`)
     .join('\n')}`;
 
