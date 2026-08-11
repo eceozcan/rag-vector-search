@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import AppLayout from '../components/AppLayout';
-import { clearAdminSecret, getAdminSecret, isAdminAuthenticated } from '../lib/auth';
+import { authHeaders, clearSession, isAdmin, isAuthenticated } from '../lib/auth';
 
 const stats = [
   { label: 'Active projects', value: '12' },
@@ -36,8 +36,13 @@ export default function Dashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!isAdminAuthenticated()) {
+    // Only admins may view the dashboard. Non-admins are redirected.
+    if (!isAuthenticated()) {
       router.replace('/login');
+      return;
+    }
+    if (!isAdmin()) {
+      router.replace('/');
       return;
     }
     setAuthChecked(true);
@@ -47,11 +52,9 @@ export default function Dashboard() {
     setIngestStatus(null);
     setIsSubmitting(true);
     try {
-      const secret = getAdminSecret();
-      const response = await fetch('/api/admin/embeddings', {
+      const response = await fetch('/api/embeddings/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ secret }),
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
       });
       const data = await response.json();
       if (!response.ok) {
@@ -66,7 +69,7 @@ export default function Dashboard() {
   };
 
   const handleLogout = () => {
-    clearAdminSecret();
+    clearSession();
     router.replace('/login');
   };
 
@@ -130,6 +133,12 @@ export default function Dashboard() {
             ))}
           </div>
         </header>
+
+        {ingestStatus ? (
+          <p className="mt-6 rounded-2xl border border-white/10 bg-slate-900/60 px-5 py-3 text-sm text-slate-200">
+            {ingestStatus}
+          </p>
+        ) : null}
 
         <main className="mt-10 grid gap-6 lg:grid-cols-3">
           <section className="lg:col-span-2 rounded-3xl border border-white/10 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/20 backdrop-blur-xl">

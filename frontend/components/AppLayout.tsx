@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { isAdminAuthenticated } from '../lib/auth';
+import { useRouter } from 'next/router';
+import { clearSession, isAdmin as checkIsAdmin, isAuthenticated } from '../lib/auth';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -10,11 +11,20 @@ interface AppLayoutProps {
 }
 
 export default function AppLayout({ children, title, description }: AppLayoutProps) {
-  const [isAdmin, setIsAdmin] = useState(false);
+  const router = useRouter();
+  const [authed, setAuthed] = useState(false);
+  const [admin, setAdmin] = useState(false);
 
   useEffect(() => {
-    setIsAdmin(isAdminAuthenticated());
-  }, []);
+    // Read auth state on the client after mount to avoid SSR/localStorage issues.
+    setAuthed(isAuthenticated());
+    setAdmin(checkIsAdmin());
+  }, [router.pathname]);
+
+  const handleLogout = () => {
+    clearSession();
+    router.replace('/login');
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -35,25 +45,32 @@ export default function AppLayout({ children, title, description }: AppLayoutPro
             >
               Chat
             </Link>
-            <Link
-              href="/dashboard"
-              className="rounded-full border border-white/10 bg-violet-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-400"
-            >
-              Dashboard
-            </Link>
-            {isAdmin ? (
+
+            {/* Dashboard link is only shown to admins. */}
+            {admin ? (
               <Link
-                href="/logout"
+                href="/dashboard"
+                className="rounded-full border border-white/10 bg-violet-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-400"
+              >
+                Dashboard
+              </Link>
+            ) : null}
+
+            {/* Show Logout when signed in, otherwise a Sign in link. */}
+            {authed ? (
+              <button
+                type="button"
+                onClick={handleLogout}
                 className="rounded-full bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10"
               >
                 Logout
-              </Link>
+              </button>
             ) : (
               <Link
                 href="/login"
                 className="rounded-full bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10"
               >
-                Admin
+                Sign in
               </Link>
             )}
           </nav>
