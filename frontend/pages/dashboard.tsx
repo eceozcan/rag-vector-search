@@ -2,14 +2,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import AppLayout from '../components/AppLayout';
-import { authHeaders, clearSession, isAdmin, isAuthenticated } from '../lib/auth';
-
-const stats = [
-  { label: 'Active projects', value: '12' },
-  { label: 'Indexed docs', value: '248' },
-  { label: 'Search requests', value: '1.4K' },
-  { label: 'Inference time', value: '220ms' },
-];
+import { API_BASE, authHeaders, clearSession, isAdmin, isAuthenticated } from '../lib/auth';
 
 const sections = [
   {
@@ -34,6 +27,8 @@ export default function Dashboard() {
   const [authChecked, setAuthChecked] = useState(false);
   const [ingestStatus, setIngestStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [stats, setStats] = useState<any | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
   useEffect(() => {
     // Only admins may view the dashboard. Non-admins are redirected.
@@ -48,11 +43,35 @@ export default function Dashboard() {
     setAuthChecked(true);
   }, [router]);
 
+  // Loads real system + search statistics from the backend.
+  const loadStats = async () => {
+    setStatsError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/admin/stats`, {
+        headers: { ...authHeaders() },
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setStatsError(data?.error || 'Failed to load stats');
+        return;
+      }
+      setStats(data);
+    } catch (error: any) {
+      setStatsError(error?.message || 'Failed to load stats');
+    }
+  };
+
+  useEffect(() => {
+    if (authChecked) {
+      loadStats();
+    }
+  }, [authChecked]);
+
   const handleStartIngestion = async () => {
     setIngestStatus(null);
     setIsSubmitting(true);
     try {
-      const response = await fetch('/api/embeddings/generate', {
+      const response = await fetch(`${API_BASE}/api/embeddings/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
       });
@@ -61,6 +80,8 @@ export default function Dashboard() {
         setIngestStatus(data?.error || 'Failed to start ingestion');
       } else {
         setIngestStatus('Embedding generation started successfully.');
+        // Refresh stats shortly after so new embeddings are reflected.
+        setTimeout(loadStats, 1500);
       }
     } catch (error: any) {
       setIngestStatus(error?.message || 'Failed to call admin endpoint');
@@ -87,13 +108,14 @@ export default function Dashboard() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-3">
               <p className="inline-flex rounded-full bg-violet-500/10 px-3 py-1 text-sm font-semibold text-violet-200 ring-1 ring-violet-500/20">
-                Playable-inspired dashboard
+                Admin dashboard
               </p>
               <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-                Build smarter search experiences with beautiful data control.
+                Monitor your RAG system at a glance.
               </h1>
               <p className="max-w-2xl text-base text-slate-300 sm:text-lg">
-                A modern admin view for your RAG system: search analytics, ingestion status, document indexing, and quick access to your AI tools.
+                A modern admin view for your RAG system: index health, ingestion status,
+                document indexing, and basic search analytics.
               </p>
             </div>
             <div className="grid gap-3 sm:inline-flex sm:items-center">
@@ -109,7 +131,7 @@ export default function Dashboard() {
                 disabled={isSubmitting}
                 className="inline-flex items-center justify-center rounded-full bg-violet-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition hover:bg-violet-400 disabled:opacity-50"
               >
-                {isSubmitting ? 'Starting...' : 'Ingest new corpus'}
+                {isSubmitting ? 'Starting...' : 'Generate embeddings'}
               </button>
               <button
                 type="button"
@@ -122,7 +144,12 @@ export default function Dashboard() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {stats.map((stat) => (
+            {[
+              { label: 'Indexed documents', value: stats ? String(stats.documentCount) : '—' },
+              { label: 'Chunks', value: stats ? String(stats.chunkCount) : '—' },
+              { label: 'Embeddings', value: stats ? String(stats.embeddingCount) : '—' },
+              { label: 'Searches this session', value: stats ? String(stats.searchCount) : '—' },
+            ].map((stat) => (
               <div
                 key={stat.label}
                 className="rounded-3xl border border-white/10 bg-slate-950/80 p-6 shadow-[0_20px_60px_-30px_rgba(15,23,42,0.75)]"
@@ -132,6 +159,10 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
+
+          {statsError ? (
+            <p className="text-sm text-red-400">Stats: {statsError}</p>
+          ) : null}
         </header>
 
         {ingestStatus ? (
@@ -144,23 +175,39 @@ export default function Dashboard() {
           <section className="lg:col-span-2 rounded-3xl border border-white/10 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/20 backdrop-blur-xl">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-semibold text-white">Latest insights</h2>
-                <p className="mt-2 text-sm text-slate-400">Realtime signals from search traffic and knowledge base coverage.</p>
+                <h2 className="text-2xl font-semibold text-white">System status</h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  Live signals from the index and ingestion pipeline.
+                </p>
               </div>
-              <div className="rounded-full bg-slate-800 px-3 py-1 text-sm font-medium text-slate-200 ring-1 ring-white/10">
-                Updated now
-              </div>
+              <button
+                type="button"
+                onClick={loadStats}
+                className="rounded-full bg-slate-800 px-3 py-1 text-sm font-medium text-slate-200 ring-1 ring-white/10 transition hover:bg-slate-700"
+              >
+                Refresh
+              </button>
             </div>
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
               <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-6">
-                <p className="text-sm text-slate-400">Search success rate</p>
-                <p className="mt-4 text-3xl font-semibold text-white">92%</p>
-                <p className="mt-2 text-sm text-slate-500">High relevance on the latest user queries.</p>
+                <p className="text-sm text-slate-400">Index health</p>
+                <p className="mt-4 text-3xl font-semibold text-white">
+                  {stats ? (stats.indexHealthy ? 'Healthy' : 'Incomplete') : '—'}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  {stats ? `${stats.embeddingCount}/${stats.chunkCount} chunks embedded` : 'Loading…'}
+                </p>
               </div>
               <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-6">
-                <p className="text-sm text-slate-400">Pending ingestion jobs</p>
-                <p className="mt-4 text-3xl font-semibold text-white">3</p>
-                <p className="mt-2 text-sm text-slate-500">Review the queued documents and trigger reindexing.</p>
+                <p className="text-sm text-slate-400">Ingestion</p>
+                <p className="mt-4 text-3xl font-semibold text-white">
+                  {stats ? `${stats.ingestion.completed}/${stats.ingestion.total}` : '—'}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  {stats && stats.ingestion.lastIngestedAt
+                    ? `Last: ${new Date(stats.ingestion.lastIngestedAt).toLocaleString()}`
+                    : 'documents completed'}
+                </p>
               </div>
             </div>
           </section>
@@ -169,19 +216,29 @@ export default function Dashboard() {
             <div className="rounded-3xl bg-slate-950/80 p-5">
               <h3 className="text-lg font-semibold text-white">Quick actions</h3>
               <div className="mt-4 space-y-3">
-                <button className="w-full rounded-2xl bg-violet-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-400">
-                  Start new ingestion
+                <button
+                  type="button"
+                  onClick={handleStartIngestion}
+                  disabled={isSubmitting}
+                  className="w-full rounded-2xl bg-violet-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-400 disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Starting...' : 'Generate embeddings'}
                 </button>
-                <button className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-900">
-                  View search logs
+                <button
+                  type="button"
+                  onClick={loadStats}
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-900"
+                >
+                  Refresh stats
                 </button>
               </div>
             </div>
 
             <div className="rounded-3xl bg-slate-950/80 p-5">
-              <h3 className="text-lg font-semibold text-white">Brand vision</h3>
+              <h3 className="text-lg font-semibold text-white">About this view</h3>
               <p className="mt-3 text-sm leading-6 text-slate-400">
-                Create a refined dashboard experience inspired by PlayableFactory — high contrast, smooth layouts, and intentional content sections for fast decision-making.
+                This dashboard is admin-only. Access is enforced on the server: a regular
+                user cannot read these stats or trigger ingestion, even by calling the API directly.
               </p>
             </div>
           </aside>

@@ -14,9 +14,14 @@ import {
   requireAdmin,
 } from './auth';
 import { getUserByEmail } from './db';
-
+import fs from 'fs';
+import path from 'path';
 dotenv.config();
+// Simple in-memory counter for search analytics (resets on restart).
+let searchCount = 0;
 
+// Location of the persisted index files (documents, chunks, embeddings).
+const INDEX_DIR = path.resolve(__dirname, '..', '..', 'data', 'index');
 const fastify = Fastify({ logger: true });
 
 fastify.get('/health', async () => ({ status: 'ok', time: new Date().toISOString() }));
@@ -105,7 +110,61 @@ fastify.post('/api/search', { preHandler: requireAuth }, async (request, reply) 
     const qVec = await embedTextHybrid(query);
     const results = topKSearch(qVec, safeK, 0.25);
     const composed = await composeGroundedAnswer(query, results);
+    searchCount += 1;
     return { query, results, composed, source: 'backend-english-v1' };
+  } catch (err: any) {
+    fastify.log.error(err);
+    reply.status(500);
+    return { error: err.message || String(err) };
+  }
+});
+// ---------- Admin: system + search stats (admin role required) ----------
+fastify.get('/api/admin/stats', { preHandler: requireAdmin }, async (_request, reply) => {
+  try {
+    const readJson = (file: string): any[] => {
+      const p = path.join(INDEX_DIR, file);
+      if (!fs.existsSync(p)) return [];
+      return JSON.parse(fs.readFileSync(p, 'utf-8'));
+    };
+
+    const documents = readJson('documents.json');
+    const chunks = readJson('chunks.json');
+    const ingestStatus = readJson('ingest-status.json');
+
+    // Count embedding files on disk.
+    const embDir = path.join(INDEX_DIR, 'embeddings');
+    const embeddingCount = fs.existsSync(embDir)
+      ? fs.readdirSync(embDir).filter((f) => f.endsWith('.json')).length
+      : 0;
+
+    const chunkCount = Array.isArray(chunks) ? chunks.length : 0;
+
+    // Index is healthy when every chunk has an embedding.
+    const indexHealthy = chunkCount > 0 && embeddingCount >= chunkCount;
+
+    // Most recent ingestion timestamp, if available.
+    const lastIngestedAt = ingestStatus.length
+      ? ingestStatus
+          .map((s: any) => s.updatedAt)
+          .filter(Boolean)
+          .sort()
+          .slice(-1)[0]
+      : null;
+
+    const completed = ingestStatus.filter((s: any) => s.status === 'completed').length;
+
+    return {
+      documentCount: Array.isArray(documents) ? documents.length : 0,
+      chunkCount,
+      embeddingCount,
+      indexHealthy,
+      ingestion: {
+        total: ingestStatus.length,
+        completed,
+        lastIngestedAt,
+      },
+      searchCount,
+    };
   } catch (err: any) {
     fastify.log.error(err);
     reply.status(500);
