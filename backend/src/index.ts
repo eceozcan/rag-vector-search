@@ -5,14 +5,7 @@ import bcrypt from 'bcryptjs';
 import { embedTextHybrid, ensureChunkEmbeddings } from './embeddings';
 import { topKSearch } from './search';
 import { composeGroundedAnswer } from './compose';
-import {
-  checkAdminSecret,
-  getAdminSecretFromRequest,
-  isAdminAuthEnabled,
-  signToken,
-  requireAuth,
-  requireAdmin,
-} from './auth';
+import { signToken, requireAuth, requireAdmin } from './auth';
 import { getUserByEmail } from './db';
 import fs from 'fs';
 import path from 'path';
@@ -70,15 +63,6 @@ fastify.post('/api/auth/login', async (request, reply) => {
 // confirm a stored token is still valid and to read the role).
 fastify.get('/api/auth/me', { preHandler: requireAuth }, async (request) => {
   return { user: (request as any).user };
-});
-
-// ---------- Admin: legacy secret verify (kept for backward compatibility) ----------
-fastify.post('/api/admin/verify', async (request, reply) => {
-  const secret = getAdminSecretFromRequest(request) || (request.body as any)?.secret;
-  if (!checkAdminSecret(secret)) {
-    return reply.status(401).send({ error: 'Unauthorized: invalid admin secret' });
-  }
-  return { ok: true, adminAuthEnabled: isAdminAuthEnabled() };
 });
 
 // ---------- Admin: trigger embedding generation (admin role required) ----------

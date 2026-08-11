@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import { DocumentRecord, Chunk, IngestStatus } from '../../packages/shared/src';
+import { DocumentRecord, Chunk, IngestStatus } from '@shared/index';
 
 const DEFAULT_CHUNK_CHARS = 2000; // approx for 500 tokens depending on language
 
