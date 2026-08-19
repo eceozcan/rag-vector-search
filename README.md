@@ -1,4 +1,4 @@
-# Playable RAG Vector Search (Monorepo)
+# RAG Vector Search (Monorepo)
 
 A small full-stack TypeScript monorepo that indexes a document corpus into a vector
 store, lets users search it semantically, and produces grounded RAG answers with
